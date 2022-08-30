@@ -9,7 +9,7 @@
       <v-row justify="center" no-gutters>
         <v-col lg="6">
           <v-file-input
-          accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
             label="Click here to import file"
             outlined
             prepend-icon="mdi-file"
@@ -35,7 +35,7 @@
       <v-row justify="center" no-gutters>
         <v-col lg="6">
           <v-file-input
-          accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
             label="Click here to import file"
             outlined
             prepend-icon="mdi-file"
@@ -228,8 +228,6 @@ export default {
             const MasterKeyords = XLSX.utils.json_to_sheet(this.MasterKwrds, {
               skipHeader: true,
             });
-            // XLSX.utils.sheet_add_aoa(MasterKeyords, this.Heading);
-            // XLSX.utils.sheet_add_json(MasterKeyords, this.MasterKwrds, { origin: 'A2', skipHeader: true });
             XLSX.utils.book_append_sheet(wb, MasterKeyords, "Master KWS");
 
             var rootKWs = XLSX.utils.json_to_sheet(this.ResultRootKeywords, {
@@ -243,7 +241,7 @@ export default {
             });
             XLSX.utils.book_append_sheet(wb, rootKWs, "Index KWs");
             this.loading = false;
-            XLSX.writeFile(wb, "Master Keywords Sheet.xlsx");
+             XLSX.writeFile(wb, "Master Keywords Sheet.xlsx");
           } catch (error) {
             this.loading = false;
             this.popup = true;
@@ -270,10 +268,14 @@ export default {
 
     addMasterData(data) {
       for (var o = 0; o < data.length; o++) {
-        var splitWord = [];
-        splitWord.push(data[o][0].trim().split(/\s+/));
+        var splittedWord = [];
         var found = false;
-        splitWord.forEach((element) => {
+        splittedWord.push(data[o][0].trim().split(/\s+/));
+        splittedWord.forEach((element) => {
+          if (element.length < 2) {
+            found = true;
+            return;
+          }
           element.forEach((singleWord) => {
             this.neverKwrds.forEach((neverword) => {
               if (String(singleWord) == String(neverword)) {
