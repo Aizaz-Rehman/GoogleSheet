@@ -9,6 +9,7 @@
       <v-row justify="center" no-gutters>
         <v-col lg="6">
           <v-file-input
+          accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
             label="Click here to import file"
             outlined
             prepend-icon="mdi-file"
@@ -34,6 +35,7 @@
       <v-row justify="center" no-gutters>
         <v-col lg="6">
           <v-file-input
+          accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
             label="Click here to import file"
             outlined
             prepend-icon="mdi-file"
@@ -49,7 +51,7 @@
         </v-col>
       </v-row>
       <v-row justify="center"> </v-row>
-      <!-- <clip-loader v-if="loading" :color="color1" :size="size"></clip-loader> -->
+      <clip-loader v-if="loading" :color="color1" :size="size"></clip-loader>
     </v-container>
   </div>
 </template>
@@ -57,7 +59,7 @@
 <script>
 import XLSX from "xlsx";
 import toastr from "toastr";
-// import ClipLoader from "vue-spinner/src/ClipLoader.vue";
+import ClipLoader from "vue-spinner/src/ClipLoader.vue";
 export default {
   name: "App",
 
@@ -68,7 +70,7 @@ export default {
       selectXlsx: null,
       selectSheet: null,
       Keywords: [],
-      SplittedWords: [],
+      SplittedWordsArray: [],
       ResultKeywords: [],
       MasterKwrds: [],
       RootKeywords: [],
@@ -99,6 +101,7 @@ export default {
           hideMethod: "fadeOut",
           opacity: "100",
           Heading: [],
+          neverKwrds: [],
         };
         toastr.error('Please upload a xlsx file"');
         return;
@@ -121,10 +124,12 @@ export default {
             }
 
             this.Keywords.forEach((element) => {
-              this.SplittedWords.push(element.trim().split(/\s+/));
+              this.SplittedWordsArray.push(element.trim().split(/\s+/));
             });
 
-            this.ResultKeywords = this.getSpilltedWords(this.SplittedWords);
+            this.ResultKeywords = this.getSpilltedWords(
+              this.SplittedWordsArray
+            );
 
             this.ResultKeywords = this.dupCounts(this.ResultKeywords);
             this.ResultKeywords = this.ResultKeywords.sort(
@@ -135,16 +140,20 @@ export default {
             });
             let Heading = [["Keywords", "Count", "Percentage"]];
             XLSX.utils.sheet_add_aoa(singelKeywords, Heading);
-            XLSX.utils.sheet_add_json(singelKeywords, this.ResultKeywords, { origin: 'A2', skipHeader: true });
-            XLSX.utils.book_append_sheet(wb, singelKeywords, "Single Words");
+            XLSX.utils.sheet_add_json(singelKeywords, this.ResultKeywords, {
+              origin: "A2",
+              skipHeader: true,
+            });
+            XLSX.utils.book_append_sheet(wb, singelKeywords, "Single KWrds");
             this.loading = false;
             XLSX.writeFile(wb, "Analyzed Keywords Sheet.xlsx");
           } catch (error) {
+            this.loading = false;
             this.popup = true;
             this.err = error;
           }
         };
-     
+
         reader.readAsBinaryString(this.selectXlsx);
       }
     },
@@ -169,14 +178,13 @@ export default {
         return;
       }
       if (this.selectSheet) {
-        this.loading = true;
-
         const myReader = new FileReader();
 
         myReader.onload = (e) => {
           /* Parse data */
 
           try {
+            this.loading = true;
             const bstr = e.target.result;
             const wb = XLSX.read(bstr, { type: "binary" });
             /* Get first worksheet */
@@ -185,30 +193,23 @@ export default {
             const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
             const nkeywsname = wb.SheetNames[2];
             const nkwordsws = wb.Sheets[nkeywsname];
-            var neverKwrds = XLSX.utils.sheet_to_json(nkwordsws, {
+            this.neverKwrds = XLSX.utils.sheet_to_json(nkwordsws, {
               header: 1,
             });
-            for (var i = 1; i < data.length; i++) {
-              this.Keywords.push(data[i][0]);
-            }
+
+            this.getKeywords(data);
+            this.Heading = data[0];
             //filtering empty items
             this.Keywords = this.Keywords.filter((e) => e != "");
-            neverKwrds = neverKwrds.filter((e) => e != "");
-            for (var o = 1; o < data.length; o++) {
-              var found = false;
-              neverKwrds.forEach((neverword) => {
-                if (String(data[o][0]).includes(String(neverword))) {
-                  found = true;
-                }
-              });
-              if (found) continue;
-              this.MasterKwrds.push(data[o]);
-            }
-            this.Keywords.forEach((element) => {
-              this.SplittedWords.push(element.trim().split(/\s+/));
-            });
-            this.ResultKeywords = this.getSpilltedWords(this.SplittedWords);
+            this.neverKwrds = this.neverKwrds.filter((e) => e != "");
+            //adding data to Master KWs array
+            this.addMasterData(data);
+            this.getSpilltedWordsArray(this.Keywords);
+            this.ResultKeywords = this.getSpilltedWords(
+              this.SplittedWordsArray
+            );
             this.ResultKeywords = this.dupCounts(this.ResultKeywords);
+
             for (var q = 0; q < this.MasterKwrds.length; q++) {
               this.RootKeywords.push(this.MasterKwrds[q][0]);
             }
@@ -223,22 +224,28 @@ export default {
             this.ResultRootKeywords = this.ResultRootKeywords.sort(
               (a, b) => b[1] - a[1]
             );
+
+            const MasterKeyords = XLSX.utils.json_to_sheet(this.MasterKwrds, {
+              skipHeader: true,
+            });
+            // XLSX.utils.sheet_add_aoa(MasterKeyords, this.Heading);
+            // XLSX.utils.sheet_add_json(MasterKeyords, this.MasterKwrds, { origin: 'A2', skipHeader: true });
+            XLSX.utils.book_append_sheet(wb, MasterKeyords, "Master KWS");
+
             var rootKWs = XLSX.utils.json_to_sheet(this.ResultRootKeywords, {
               skipHeader: true,
             });
             let Heading = [["Keywords", "Count", "Percentage"]];
             XLSX.utils.sheet_add_aoa(rootKWs, Heading);
-            XLSX.utils.sheet_add_json(rootKWs, this.ResultRootKeywords, { origin: 'A2', skipHeader: true });
-            XLSX.utils.book_append_sheet(wb, rootKWs, "Root KWs");
-
-            const MasterKeyords = XLSX.utils.json_to_sheet(this.MasterKwrds, {
+            XLSX.utils.sheet_add_json(rootKWs, this.ResultRootKeywords, {
+              origin: "A2",
               skipHeader: true,
             });
-            
-            XLSX.utils.book_append_sheet(wb, MasterKeyords, "Master Words");
+            XLSX.utils.book_append_sheet(wb, rootKWs, "Index KWs");
             this.loading = false;
-            XLSX.writeFile(wb, "Analyzed Keywords Sheet.xlsx");
+            XLSX.writeFile(wb, "Master Keywords Sheet.xlsx");
           } catch (error) {
+            this.loading = false;
             this.popup = true;
             this.err = error;
             alert(error);
@@ -246,6 +253,38 @@ export default {
         };
 
         myReader.readAsBinaryString(this.selectSheet);
+      }
+    },
+    getKeywords(data) {
+      for (var i = 1; i < data.length; i++) {
+        this.Keywords.push(data[i][0]);
+      }
+    },
+    getSpilltedWordsArray(arr) {
+      var tempArr = [];
+      arr.forEach((element) => {
+        tempArr.push(element.trim().split(/\s+/));
+      });
+      return tempArr;
+    },
+
+    addMasterData(data) {
+      for (var o = 0; o < data.length; o++) {
+        var splitWord = [];
+        splitWord.push(data[o][0].trim().split(/\s+/));
+        var found = false;
+        splitWord.forEach((element) => {
+          element.forEach((singleWord) => {
+            this.neverKwrds.forEach((neverword) => {
+              if (String(singleWord) == String(neverword)) {
+                found = true;
+                return;
+              }
+            });
+          });
+        });
+        if (found) continue;
+        this.MasterKwrds.push(data[o]);
       }
     },
     getSpilltedWords(arr) {
@@ -296,7 +335,7 @@ export default {
   },
 
   components: {
-    // ClipLoader,
+    ClipLoader,
   },
 };
 </script>
